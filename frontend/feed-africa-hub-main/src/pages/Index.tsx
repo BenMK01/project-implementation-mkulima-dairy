@@ -1,20 +1,17 @@
-import Header from "@/components/Header";
-import Hero from "@/components/Hero";
-import FeedMarketplace from "@/components/FeedMarketplace";
-import FeedRecommendations from "@/components/FeedRecommendations";
-import Features from "@/components/Features";
-import Footer from "@/components/Footer";
+// src/pages/Index.tsx (Example - ensure it does NOT render Header/Footer itself)
+import React from 'react';
+// ... other imports ...
+import Hero from '@/components/Hero'; // Adjust import path if necessary
+import Features from '@/components/Features'; // Adjust import path if necessary
 
-const Index = () => {
+const Index: React.FC = () => {
   return (
-    <div className="min-h-screen bg-background">
-      <Header />
+    <>
+      {/* DO NOT include <Header /> here */}
       <Hero />
-      <FeedMarketplace />
-      <FeedRecommendations />
       <Features />
-      <Footer />
-    </div>
+      {/* DO NOT include <Footer /> here */}
+    </>
   );
 };
 
