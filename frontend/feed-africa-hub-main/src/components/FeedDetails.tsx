@@ -5,27 +5,26 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import api from '../api'; // Make sure this points to your configured axios instance
+import api from '../api';
 
-// Define the FeedProduct interface matching your Django model
 interface FeedProduct {
   id: number;
   name: string;
   feed_type: string;
   description: string;
   region: string;
-  price_per_kg: number;
+  price_per_kg: number | string;
   available_quantity_kg: number;
-  image?: string; // Optional field
+  image?: string;
   is_available: boolean;
-  date_added: string; // ISO format
+  date_added: string;
 }
 
 const FeedDetails: React.FC = () => {
   const { id } = useParams<{ id?: string }>();
   const navigate = useNavigate();
   const [feed, setFeed] = useState<FeedProduct | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -40,13 +39,13 @@ const FeedDetails: React.FC = () => {
         const response = await api.get<FeedProduct>(`/marketplace/api/feeds/${id}/`);
         setFeed(response.data);
       } catch (err: any) {
-        console.error("Error fetching feed details:", err);
+        console.error("Error fetching feed:", err);
         if (err.response?.status === 404) {
           setError("Feed not found.");
         } else if (err.response?.status === 401 || err.response?.status === 403) {
           navigate('/login');
         } else {
-          setError("Failed to load feed details. Please try again later.");
+          setError("Failed to load feed.");
         }
       } finally {
         setLoading(false);
@@ -56,18 +55,23 @@ const FeedDetails: React.FC = () => {
     fetchFeed();
   }, [id, navigate]);
 
+  const getImageUrl = (path?: string): string => {
+    if (!path) return '';
+    return path.startsWith('http') ? path : `http://127.0.0.1:8000${path}`;
+  };
+
   if (loading) {
     return (
       <div className="container mx-auto px-4 py-8">
-        <h1 className="text-3xl font-bold text-foreground mb-6">Feed Details</h1>
-        <Card className="w-full max-w-2xl mx-auto">
-          <Skeleton className="h-48 w-full" />
+        <Button onClick={() => navigate('/feed-marketplace')} className="mb-6">
+          ← Back to Marketplace
+        </Button>
+        <Card className="max-w-2xl mx-auto">
+          <Skeleton className="h-64 w-full" />
           <CardContent className="p-6">
             <Skeleton className="h-6 w-3/4 mb-4" />
             <Skeleton className="h-4 w-full mb-2" />
-            <Skeleton className="h-4 w-5/6 mb-2" />
-            <Skeleton className="h-4 w-1/2 mb-4" />
-            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full mt-6" />
           </CardContent>
         </Card>
       </div>
@@ -77,10 +81,10 @@ const FeedDetails: React.FC = () => {
   if (error || !feed) {
     return (
       <div className="container mx-auto px-4 py-8 text-center">
-        <div className="text-red-500 text-lg">{error}</div>
-        <Button className="mt-4" onClick={() => navigate('/feed-marketplace')}>
-          Back to Marketplace
+        <Button onClick={() => navigate('/feed-marketplace')} className="mb-6">
+          ← Back to Marketplace
         </Button>
+        <h2 className="text-2xl text-red-600">{error}</h2>
       </div>
     );
   }
@@ -90,16 +94,16 @@ const FeedDetails: React.FC = () => {
       <Button onClick={() => navigate('/feed-marketplace')} className="mb-6">
         ← Back to Marketplace
       </Button>
-      <Card className="w-full max-w-2xl mx-auto">
+      <Card className="max-w-2xl mx-auto">
         {feed.image ? (
           <img
-            src={feed.image.startsWith('http') ? feed.image : `http://127.0.0.1:8000${feed.image}`}
+            src={getImageUrl(feed.image)}
             alt={feed.name}
             className="w-full h-64 object-cover rounded-t-lg"
           />
         ) : (
-          <div className="w-full h-64 bg-gray-100 flex items-center justify-center rounded-t-lg">
-            <span className="text-gray-500">No Image Available</span>
+          <div className="w-full h-64 bg-gray-100 flex items-center justify-center">
+            <span className="text-gray-500">No Image</span>
           </div>
         )}
         <CardHeader>
@@ -110,14 +114,13 @@ const FeedDetails: React.FC = () => {
           <div className="space-y-2 text-sm">
             <div><strong>Type:</strong> {feed.feed_type}</div>
             <div><strong>Region:</strong> {feed.region}</div>
-            <div><strong>Price:</strong> KSh {feed.price_per_kg} per kg</div>
-            <div><strong>Available Quantity:</strong> {feed.available_quantity_kg} kg</div>
+            <div><strong>Price:</strong> KSh {Number(feed.price_per_kg).toFixed(2)} per kg</div>
+            <div><strong>Available:</strong> {feed.available_quantity_kg} kg</div>
             <div><strong>Status:</strong> 
-              <Badge variant={feed.is_available ? "default" : "secondary"} className="ml-2">
+              <Badge variant={feed.is_available ? "default" : "secondary"}>
                 {feed.is_available ? "In Stock" : "Out of Stock"}
               </Badge>
             </div>
-            <div><strong>Added:</strong> {new Date(feed.date_added).toLocaleDateString()}</div>
           </div>
           <Button className="w-full mt-6">Add to Cart</Button>
         </CardContent>

@@ -1,6 +1,7 @@
 // src/components/FeedMarketplace.tsx
 import React, { useState, useEffect } from 'react';
-import api from '../api'; // Import the configured axios instance
+import { useSearchParams, useLocation, Link } from 'react-router-dom';
+import api from '../api';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -8,9 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { Link } from 'react-router-dom';
 
-// Define the FeedProduct interface based on your backend model
 interface FeedProduct {
   id: number;
   name: string;
@@ -24,55 +23,73 @@ interface FeedProduct {
   date_added: string;
 }
 
-// Define filter options (match your backend choices)
-const FEED_TYPES = [
-  'Dairy Meal', 'Calf Feed', 'Hay', 'Silage', 'Mineral Mix', 'Other'
-];
-
-const REGIONS = [
-  'Central', 'Rift Valley', 'Eastern', 'Nairobi', 'Western', 'Coast', 'Nyanza', 'North Eastern'
-];
+const FEED_TYPES = ['Dairy Meal', 'Calf Feed', 'Hay', 'Silage', 'Mineral Mix', 'Other'];
+const REGIONS = ['Central', 'Rift Valley', 'Eastern', 'Nairobi', 'Western', 'Coast', 'Nyanza', 'North Eastern'];
 
 const FeedMarketplace: React.FC = () => {
   const [feeds, setFeeds] = useState<FeedProduct[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // State for filters
+  const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
+
+  // Make searchQuery stateful and update when location.search changes
+  const [searchQuery, setSearchQuery] = useState('');
+
+  useEffect(() => {
+    const q = (new URLSearchParams(location.search).get('search') || '').trim().toLowerCase();
+    console.debug('[FeedMarketplace] location.search changed ->', location.search, 'parsed search ->', q);
+    setSearchQuery(q);
+  }, [location.search]);
+
   const [filters, setFilters] = useState({
     region: '',
     feed_type: '',
-    is_available: true, // Default to showing only available feeds
+    is_available: true,
   });
 
-  // Fetch feeds based on current filters
   const fetchFeeds = async () => {
     setLoading(true);
     setError(null);
     try {
-      // Build query parameters
       const params: Record<string, string | boolean> = {};
       if (filters.region) params.region = filters.region;
       if (filters.feed_type) params.feed_type = filters.feed_type;
-      // Only add is_available if it's false
+      // Only send is_available when false to match your existing logic
       if (filters.is_available === false) params.is_available = false;
 
+      console.debug('[FeedMarketplace] fetching feeds with params:', params);
       const response = await api.get('/marketplace/api/feeds/', { params });
-      setFeeds(response.data);
+      // ensure response.data is an array
+      const data = Array.isArray(response.data) ? response.data : (response.data.results || []);
+      setFeeds(data);
     } catch (err) {
       console.error("Error fetching feeds:", err);
-      setError("Failed to load feeds. Please check the console for details.");
+      setError("Failed to load feeds.");
     } finally {
       setLoading(false);
     }
   };
 
-  // Fetch feeds whenever filters change
+  // Fetch feeds when filters change
   useEffect(() => {
     fetchFeeds();
-  }, [filters]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters]); // intentionally only depend on filters to preserve server-side filtering behavior
 
-  // Handle filter changes
+  // Client-side filtering (reactive to both feeds and searchQuery)
+  const filteredFeeds = React.useMemo(() => {
+    const q = (searchQuery || '').toLowerCase();
+    if (!q) return feeds;
+    return feeds.filter(feed =>
+      (feed.name || '').toLowerCase().includes(q) ||
+      (feed.description || '').toLowerCase().includes(q) ||
+      (feed.feed_type || '').toLowerCase().includes(q) ||
+      (feed.region || '').toLowerCase().includes(q)
+    );
+  }, [feeds, searchQuery]);
+
   const handleRegionChange = (value: string) => {
     setFilters(prev => ({ ...prev, region: value === "all" ? '' : value }));
   };
@@ -85,20 +102,26 @@ const FeedMarketplace: React.FC = () => {
     setFilters(prev => ({ ...prev, is_available: checked }));
   };
 
-  // Reset filters
   const handleResetFilters = () => {
-    setFilters({
-      region: '',
-      feed_type: '',
-      is_available: true,
-    });
+    setFilters({ region: '', feed_type: '', is_available: true });
+    setSearchParams({}); // Clear search query from URL too
   };
 
-  // Helper to resolve full image URL
   const getImageUrl = (imagePath?: string): string => {
     if (!imagePath) return '';
     return imagePath.startsWith('http') ? imagePath : `http://127.0.0.1:8000${imagePath}`;
   };
+
+  // ---- Debug helper: show current state in console for troubleshooting ----
+  useEffect(() => {
+    console.debug('[FeedMarketplace] current state ->', {
+      searchQuery,
+      filters,
+      feedsCount: feeds.length,
+      filteredCount: filteredFeeds.length,
+      locationSearch: location.search,
+    });
+  }, [searchQuery, filters, feeds, filteredFeeds.length, location.search]);
 
   if (error) {
     return <div className="container mx-auto px-4 py-8 text-center text-red-500">{error}</div>;
@@ -106,7 +129,9 @@ const FeedMarketplace: React.FC = () => {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold text-foreground mb-6">Feed Marketplace</h1>
+      <h1 className="text-3xl font-bold text-foreground mb-6">
+        Feed Marketplace {searchQuery && `- Search: "${searchQuery}"`}
+      </h1>
 
       {/* Filter Controls */}
       <div className="mb-6 p-4 bg-muted/20 rounded-lg">
@@ -176,12 +201,12 @@ const FeedMarketplace: React.FC = () => {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {feeds.length === 0 ? (
+          {filteredFeeds.length === 0 ? (
             <div className="col-span-full text-center py-8 text-muted-foreground">
-              No feed products match the current filters.
+              No feeds match your search or filters.
             </div>
           ) : (
-            feeds.map((feed) => (
+            filteredFeeds.map((feed) => (
               <Card key={feed.id} className="w-full flex flex-col">
                 {feed.image ? (
                   <img
