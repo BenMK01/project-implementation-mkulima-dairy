@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Smartphone, TrendingUp } from "lucide-react";
 import heroImage from "@/assets/hero-dairy-farm.jpg";
+import { Link } from "react-router-dom";
 
 const Hero = () => {
   return (
@@ -24,13 +25,18 @@ const Hero = () => {
 
             {/* CTA Buttons */}
             <div className="flex flex-col sm:flex-row gap-4">
-              <Button size="lg" className="bg-primary hover:bg-primary-hover text-primary-foreground">
-                Browse Feed Marketplace
-                <ArrowRight className="ml-2 h-5 w-5" />
-              </Button>
-              <Button variant="outline" size="lg">
-                Get Feed Recommendations
-              </Button>
+              <Link to="/feed-marketplace" className="w-full">
+                <Button size="lg" className="w-full bg-primary hover:bg-primary-hover text-primary-foreground">
+                  Browse Feed Marketplace
+                  <ArrowRight className="ml-2 h-5 w-5" />
+                </Button>
+              </Link>
+
+              <Link to="/feed-recommendations" className="w-full">
+                <Button variant="outline" size="lg" className="w-full">
+                  Get Feed Recommendations
+                </Button>
+              </Link>
             </div>
 
             {/* Features */}

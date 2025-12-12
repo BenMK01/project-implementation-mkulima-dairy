@@ -1,4 +1,6 @@
-// src/components/Login.tsx
+// frontend/src/components/Login.tsx
+// Full updated login component that stores tokens from simplejwt and redirects on success.
+
 import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,14 +9,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import api from '../api';
 import { useNavigate } from 'react-router-dom';
 
-const Login = () => {
+const Login: React.FC = () => {
   const [formData, setFormData] = useState({
     username: '',
     password: ''
   });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
-  const navigate = useNavigate(); // <-- React Router navigation hook
+  const navigate = useNavigate();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -31,16 +33,30 @@ const Login = () => {
         username: formData.username,
         password: formData.password
       });
-      console.log("Login successful:", response.data);
-      alert("Login successful!");
-      // ✅ Redirect to home ('/') instead of feed-marketplace
-      navigate('/'); 
+
+      // simplejwt returns { access, refresh }
+      const { access, refresh } = response.data as { access?: string; refresh?: string };
+
+      if (!access) {
+        setError('Login response did not include access token.');
+        setLoading(false);
+        return;
+      }
+
+      // Save tokens (for demo). Consider HttpOnly cookie approach for production.
+      localStorage.setItem('access_token', access);
+      if (refresh) localStorage.setItem('refresh_token', refresh);
+
+      // Optional: fetch profile or set global auth state here
+
+      alert('Login successful');
+      navigate('/'); // redirect to home or dashboard
     } catch (err: any) {
-      console.error("Login error:", err);
+      console.error('Login error:', err);
       if (err.response?.status === 401) {
-        setError("Invalid username or password.");
+        setError('Invalid username or password.');
       } else {
-        setError("Login failed. Please try again.");
+        setError('Login failed. Please try again.');
       }
     } finally {
       setLoading(false);

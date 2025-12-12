@@ -1,4 +1,4 @@
-// src/components/FeedMarketplace.tsx
+// frontend/src/components/FeedMarketplace.tsx
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useLocation, Link } from 'react-router-dom';
 import api from '../api';
@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { addToCart } from '@/lib/cart';
 
 interface FeedProduct {
   id: number;
@@ -21,25 +22,33 @@ interface FeedProduct {
   image?: string;
   is_available: boolean;
   date_added: string;
+  supplier?: any; // object {id, name} or supplier id
+}
+
+interface Supplier {
+  id: number;
+  name: string;
 }
 
 const FEED_TYPES = ['Dairy Meal', 'Calf Feed', 'Hay', 'Silage', 'Mineral Mix', 'Other'];
 const REGIONS = ['Central', 'Rift Valley', 'Eastern', 'Nairobi', 'Western', 'Coast', 'Nyanza', 'North Eastern'];
+const CART_KEY = "cart";
 
 const FeedMarketplace: React.FC = () => {
   const [feeds, setFeeds] = useState<FeedProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [selectedSupplier, setSelectedSupplier] = useState<string>('');
+
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
 
-  // Make searchQuery stateful and update when location.search changes
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     const q = (new URLSearchParams(location.search).get('search') || '').trim().toLowerCase();
-    console.debug('[FeedMarketplace] location.search changed ->', location.search, 'parsed search ->', q);
     setSearchQuery(q);
   }, [location.search]);
 
@@ -49,6 +58,20 @@ const FeedMarketplace: React.FC = () => {
     is_available: true,
   });
 
+  // Fetch suppliers for the filter dropdown
+  useEffect(() => {
+    const fetchSuppliers = async () => {
+      try {
+        const res = await api.get('/api/suppliers/');
+        const data = Array.isArray(res.data) ? res.data : (res.data.results || []);
+        setSuppliers(data);
+      } catch (err) {
+        console.warn("Failed to fetch suppliers", err);
+      }
+    };
+    fetchSuppliers();
+  }, []);
+
   const fetchFeeds = async () => {
     setLoading(true);
     setError(null);
@@ -56,12 +79,10 @@ const FeedMarketplace: React.FC = () => {
       const params: Record<string, string | boolean> = {};
       if (filters.region) params.region = filters.region;
       if (filters.feed_type) params.feed_type = filters.feed_type;
-      // Only send is_available when false to match your existing logic
       if (filters.is_available === false) params.is_available = false;
+      if (selectedSupplier) params.supplier_id = selectedSupplier;
 
-      console.debug('[FeedMarketplace] fetching feeds with params:', params);
       const response = await api.get('/marketplace/api/feeds/', { params });
-      // ensure response.data is an array
       const data = Array.isArray(response.data) ? response.data : (response.data.results || []);
       setFeeds(data);
     } catch (err) {
@@ -72,13 +93,11 @@ const FeedMarketplace: React.FC = () => {
     }
   };
 
-  // Fetch feeds when filters change
   useEffect(() => {
     fetchFeeds();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters]); // intentionally only depend on filters to preserve server-side filtering behavior
+  }, [filters, selectedSupplier]);
 
-  // Client-side filtering (reactive to both feeds and searchQuery)
   const filteredFeeds = React.useMemo(() => {
     const q = (searchQuery || '').toLowerCase();
     if (!q) return feeds;
@@ -104,7 +123,8 @@ const FeedMarketplace: React.FC = () => {
 
   const handleResetFilters = () => {
     setFilters({ region: '', feed_type: '', is_available: true });
-    setSearchParams({}); // Clear search query from URL too
+    setSelectedSupplier('');
+    setSearchParams({});
   };
 
   const getImageUrl = (imagePath?: string): string => {
@@ -112,16 +132,11 @@ const FeedMarketplace: React.FC = () => {
     return imagePath.startsWith('http') ? imagePath : `http://127.0.0.1:8000${imagePath}`;
   };
 
-  // ---- Debug helper: show current state in console for troubleshooting ----
-  useEffect(() => {
-    console.debug('[FeedMarketplace] current state ->', {
-      searchQuery,
-      filters,
-      feedsCount: feeds.length,
-      filteredCount: filteredFeeds.length,
-      locationSearch: location.search,
-    });
-  }, [searchQuery, filters, feeds, filteredFeeds.length, location.search]);
+  const getSupplierName = (feed: FeedProduct) => {
+    if (!feed.supplier) return null;
+    if (typeof feed.supplier === 'object') return feed.supplier.name;
+    return String(feed.supplier);
+  };
 
   if (error) {
     return <div className="container mx-auto px-4 py-8 text-center text-red-500">{error}</div>;
@@ -167,6 +182,21 @@ const FeedMarketplace: React.FC = () => {
             </Select>
           </div>
 
+          <div className="space-y-2">
+            <Label htmlFor="supplier-filter">Supplier</Label>
+            <Select value={selectedSupplier || "all"} onValueChange={(v: string) => setSelectedSupplier(v === 'all' ? '' : v)}>
+              <SelectTrigger id="supplier-filter">
+                <SelectValue placeholder="All suppliers" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Suppliers</SelectItem>
+                {suppliers.map(s => (
+                  <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           <div className="flex items-center space-x-2">
             <Checkbox
               id="availability-filter"
@@ -174,12 +204,11 @@ const FeedMarketplace: React.FC = () => {
               onCheckedChange={(checked) => handleAvailabilityChange(checked as boolean)}
             />
             <Label htmlFor="availability-filter">Show only available</Label>
-          </div>
-
-          <div className="flex items-end">
-            <Button variant="outline" onClick={handleResetFilters} className="w-full">
-              Reset Filters
-            </Button>
+            <div className="flex-1 text-right">
+              <Button variant="outline" onClick={handleResetFilters} className="w-full">
+                Reset Filters
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -234,11 +263,26 @@ const FeedMarketplace: React.FC = () => {
                   <p className="text-xs text-gray-500">Type: {feed.feed_type}</p>
                   <p className="text-xs text-gray-500">Region: {feed.region}</p>
                   <p className="text-xs text-gray-500">Available Qty: {feed.available_quantity_kg} kg</p>
+                  {getSupplierName(feed) && (
+                    <p className="text-xs text-gray-700 mt-2">
+                      Supplier: {' '}
+                      <Link to={`/supplier/${typeof feed.supplier === 'object' ? feed.supplier.id : feed.supplier}`} className="text-primary hover:underline">
+                        {getSupplierName(feed)}
+                      </Link>
+                    </p>
+                  )}
                 </CardContent>
-                <div className="px-4 pb-4">
+                <div className="px-4 pb-4 flex space-x-2">
                   <Link to={`/feed/${feed.id}`} className="w-full">
                     <Button className="w-full">View Details</Button>
                   </Link>
+                  <Button className="w-full" onClick={() => {
+                    const ok = addToCart({ id: feed.id, name: feed.name, price_per_kg: feed.price_per_kg, quantity: 1 });
+                    if (ok) alert('Added to cart');
+                    else alert('Failed to add to cart');
+                  }}>
+                    Add
+                  </Button>
                 </div>
               </Card>
             ))

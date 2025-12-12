@@ -1,132 +1,116 @@
-// src/components/MLForecast.tsx
-import React, { useState, useEffect } from 'react';
-import api from '../api'; // Import the configured axios instance
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import React, { useEffect, useState } from "react";
+import api from "../api";
 
-// Define the Forecast interface based on your backend model
-interface Forecast {
-  id: number;
-  location: string;
-  crop_type: string;
-  predicted_availability: number; // e.g., 0.85
-  prediction_date: string; // ISO string format
-  confidence_level: number; // e.g., 0.9
-  created_at: string; // ISO string format
-}
+type Projection = {
+  date: string;
+  available_kg: number;
+  status: string;
+};
 
-const MLForecast: React.FC = () => {
-  const [forecasts, setForecasts] = useState<Forecast[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+type RegionForage = {
+  region: string;
+  current_total_kg: number;
+  daily_consumption_kg: number;
+  projections: Projection[];
+};
+
+type ForageResponse = {
+  region: string;
+  generated_at: string;
+  days: number;
+  regions: RegionForage[];
+};
+
+const ForageForecasts: React.FC<{ region?: string; days?: number }> = ({ region = "", days = 7 }) => {
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [data, setData] = useState<ForageResponse | null>(null);
 
   useEffect(() => {
-    const fetchForecasts = async () => {
+    const fetchData = async () => {
+      setLoading(true);
+      setError(null);
       try {
-        // Fetch all forecasts or filter by location if needed: /api/forecast/?location=Nyeri%20County
-        const response = await api.get('/api/forecast/');
-        setForecasts(response.data);
-      } catch (err) {
-        console.error("Error fetching forecasts:", err);
-        setError("Failed to load forecast data. Please try again later.");
+        const params: Record<string, any> = {};
+        if (region) params.region = region;
+        if (days) params.days = days;
+        const resp = await api.get("/api/forecast/forage/", { params });
+        setData(resp.data as ForageResponse);
+      } catch (err: any) {
+        console.error("Forage forecast fetch error:", err);
+        setError("Failed to load forage forecasts.");
       } finally {
         setLoading(false);
       }
     };
+    fetchData();
+  }, [region, days]);
 
-    fetchForecasts();
-  }, []);
-
-  if (error) {
-    return <div className="container mx-auto px-4 py-8 text-center text-red-500">{error}</div>;
+  if (loading) return <div className="p-4">Loading forage availability…</div>;
+  if (error) return <div className="p-4 text-red-700 font-medium">{error}</div>;
+  if (!data || !data.regions || data.regions.length === 0) {
+    return <div className="p-4 text-gray-700">No forage data available.</div>;
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold text-foreground mb-6">Forage Availability Forecasts</h1>
-      <p className="text-sm text-muted-foreground mb-6">
-        Machine learning predictions for feed availability based on location and seasonal trends.
-      </p>
+    <div className="p-4">
+      <h2 className="text-2xl font-bold text-gray-900 mb-4">Forage Availability Forecast — <span className="font-medium text-gray-700">{data.region}</span></h2>
 
-      {loading ? (
-        // Skeleton loader for the table
-        <div className="border rounded-md">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-[100px]">Location</TableHead>
-                <TableHead>Crop Type</TableHead>
-                <TableHead>Prediction Date</TableHead>
-                <TableHead>Availability</TableHead>
-                <TableHead>Confidence</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {[...Array(5)].map((_, index) => (
-                <TableRow key={index}>
-                  <TableCell><Skeleton className="h-4 w-20" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-24" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-28" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-16" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-16" /></TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      ) : (
-        <div className="border rounded-md">
-          {forecasts.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">No forecast data available.</div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[100px]">Location</TableHead>
-                  <TableHead>Crop Type</TableHead>
-                  <TableHead>Prediction Date</TableHead>
-                  <TableHead>Availability Score</TableHead>
-                  <TableHead>Confidence</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {forecasts.map((forecast) => (
-                  <TableRow key={forecast.id}>
-                    <TableCell className="font-medium">{forecast.location}</TableCell>
-                    <TableCell>{forecast.crop_type}</TableCell>
-                    <TableCell>{new Date(forecast.prediction_date).toLocaleDateString()}</TableCell>
-                    <TableCell>
-                      <div className="w-full bg-muted rounded-full h-2.5">
-                        <div 
-                          className="bg-primary h-2.5 rounded-full" 
-                          style={{ width: `${forecast.predicted_availability * 100}%` }}
-                        ></div>
-                      </div>
-                      <span className="text-xs text-muted-foreground mt-1 block">
-                        {(forecast.predicted_availability * 100).toFixed(1)}%
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <div className="w-full bg-muted rounded-full h-2.5">
-                        <div 
-                          className="bg-green-500 h-2.5 rounded-full" 
-                          style={{ width: `${forecast.confidence_level * 100}%` }}
-                        ></div>
-                      </div>
-                      <span className="text-xs text-muted-foreground mt-1 block">
-                        {(forecast.confidence_level * 100).toFixed(1)}%
-                      </span>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </div>
-      )}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {data.regions.map((r) => (
+          <div key={r.region} className="border rounded-lg p-4 bg-white shadow-sm">
+            <div className="flex items-start justify-between">
+              <div>
+                <div className="text-xl font-semibold text-gray-900">{r.region}</div>
+                <div className="text-sm text-gray-700 mt-1">Current stock: <span className="font-medium text-gray-900">{r.current_total_kg.toLocaleString()} kg</span></div>
+                <div className="text-sm text-gray-700 mt-0.5">Estimated daily usage: <span className="font-medium text-gray-900">{r.daily_consumption_kg.toLocaleString()} kg/day</span></div>
+              </div>
+              <div className="text-right">
+                <div className="text-sm text-gray-600">Projection ({data.days} days)</div>
+                <div className="text-xs text-gray-500 mt-1">Generated: <span className="text-gray-700 font-medium">{new Date(data.generated_at).toLocaleString()}</span></div>
+              </div>
+            </div>
+
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full text-sm border-collapse">
+                <thead>
+                  <tr className="text-left">
+                    <th className="pb-2 text-gray-700 font-medium">Date</th>
+                    <th className="pb-2 text-gray-700 font-medium">Available (kg)</th>
+                    <th className="pb-2 text-gray-700 font-medium">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {r.projections.map(p => (
+                    <tr key={p.date} className="border-t">
+                      <td className="py-3 text-gray-800">{p.date}</td>
+                      <td className="py-3 text-gray-800">{p.available_kg.toLocaleString()}</td>
+                      <td className="py-3">
+                        <span
+                          role="status"
+                          aria-label={`status-${p.status}`}
+                          className={
+                            p.status === "sufficient"
+                              ? "text-green-700 font-semibold"
+                              : p.status === "low"
+                              ? "text-yellow-700 font-semibold"
+                              : "text-red-700 font-semibold"
+                          }
+                        >
+                          {p.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+          </div>
+        ))}
+      </div>
     </div>
   );
 };
 
-export default MLForecast;
+export default ForageForecasts;

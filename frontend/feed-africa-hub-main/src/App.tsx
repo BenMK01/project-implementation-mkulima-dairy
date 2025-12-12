@@ -1,4 +1,3 @@
-// src/App.tsx
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -15,6 +14,8 @@ import Footer from './components/Footer';
 import Login from "./components/Login";
 import Register from "./components/Register";
 import UserProfile from "./components/UserProfile";
+import Cart from "./components/Cart"; // <-- added import
+import AIRecommendationsChat from "@/components/AIRecommendationsChat";
 
 const queryClient = new QueryClient();
 
@@ -38,9 +39,17 @@ const App = () => (
           <Route path="/feed/:id" element={<MainLayout><FeedDetails /></MainLayout>} />
           <Route path="/feed-recommendations" element={<MainLayout><FeedRecommendations /></MainLayout>} />
           <Route path="/forecasts" element={<MainLayout><MLForecast /></MainLayout>} />
+
+          <Route path="/cart" element={<MainLayout><Cart /></MainLayout>} /> {/* <-- cart route */}
+
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/profile" element={<MainLayout><UserProfile /></MainLayout>} />
+
+          {/* AI chat route — placed before the wildcard so it's reachable */}
+          <Route path="/ai-feed" element={<MainLayout><AIRecommendationsChat /></MainLayout>} />
+
+          {/* Catch-all must remain last */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

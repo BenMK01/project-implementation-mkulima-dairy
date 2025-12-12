@@ -1,130 +1,99 @@
-// src/components/FeedDetails.tsx
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
-import api from '../api';
+import React, { useEffect, useState } from "react";
+import { useParams, Link } from "react-router-dom";
+import api from "../api"; // your axios instance
 
 interface FeedProduct {
   id: number;
   name: string;
-  feed_type: string;
-  description: string;
-  region: string;
-  price_per_kg: number | string;
-  available_quantity_kg: number;
-  image?: string;
-  is_available: boolean;
-  date_added: string;
+  description?: string;
+  feed_type?: string;
+  region?: string;
+  price_per_kg?: number;
+  available_quantity_kg?: number;
+  image?: string | null;
+  is_available?: boolean;
 }
 
 const FeedDetails: React.FC = () => {
-  const { id } = useParams<{ id?: string }>();
-  const navigate = useNavigate();
+  const { id } = useParams<{ id: string }>();
   const [feed, setFeed] = useState<FeedProduct | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) {
-      setError("Invalid feed ID.");
+      setError("No feed id provided.");
       setLoading(false);
       return;
     }
 
     const fetchFeed = async () => {
-      try {
-        const response = await api.get<FeedProduct>(`/marketplace/api/feeds/${id}/`);
-        setFeed(response.data);
-      } catch (err: any) {
-        console.error("Error fetching feed:", err);
-        if (err.response?.status === 404) {
-          setError("Feed not found.");
-        } else if (err.response?.status === 401 || err.response?.status === 403) {
-          navigate('/login');
-        } else {
-          setError("Failed to load feed.");
+      setLoading(true);
+      setError(null);
+
+      // Candidate backend URLs (try common patterns)
+      const candidates = [
+        `/marketplace/api/feeds/${id}/`,
+        `/marketplace/api/feeds/${id}`,
+        `/api/feeds/${id}/`,
+        `/api/feeds/${id}`,
+      ];
+
+      let lastErr: any = null;
+      for (const url of candidates) {
+        try {
+          const resp = await api.get(url);
+          setFeed(resp.data);
+          setLoading(false);
+          return;
+        } catch (err: any) {
+          lastErr = err;
+          const status = err?.response?.status;
+          if (status && status !== 404) {
+            setError(`Failed to load feed (status ${status}).`);
+            setLoading(false);
+            return;
+          }
+          // if 404, try next candidate
         }
-      } finally {
-        setLoading(false);
       }
+
+      const message = lastErr?.response?.data
+        ? JSON.stringify(lastErr.response.data)
+        : "Feed not found (404) or network error.";
+      setError(message);
+      setLoading(false);
     };
 
     fetchFeed();
-  }, [id, navigate]);
+  }, [id]);
 
-  const getImageUrl = (path?: string): string => {
-    if (!path) return '';
-    return path.startsWith('http') ? path : `http://127.0.0.1:8000${path}`;
-  };
-
-  if (loading) {
-    return (
-      <div className="container mx-auto px-4 py-8">
-        <Button onClick={() => navigate('/feed-marketplace')} className="mb-6">
-          ← Back to Marketplace
-        </Button>
-        <Card className="max-w-2xl mx-auto">
-          <Skeleton className="h-64 w-full" />
-          <CardContent className="p-6">
-            <Skeleton className="h-6 w-3/4 mb-4" />
-            <Skeleton className="h-4 w-full mb-2" />
-            <Skeleton className="h-10 w-full mt-6" />
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  if (error || !feed) {
-    return (
-      <div className="container mx-auto px-4 py-8 text-center">
-        <Button onClick={() => navigate('/feed-marketplace')} className="mb-6">
-          ← Back to Marketplace
-        </Button>
-        <h2 className="text-2xl text-red-600">{error}</h2>
-      </div>
-    );
-  }
+  if (loading) return <div className="p-8">Loading feed details…</div>;
+  if (error) return <div className="p-8 text-red-600">Error: {error}</div>;
+  if (!feed) return <div className="p-8">Feed not found.</div>;
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <Button onClick={() => navigate('/feed-marketplace')} className="mb-6">
-        ← Back to Marketplace
-      </Button>
-      <Card className="max-w-2xl mx-auto">
-        {feed.image ? (
-          <img
-            src={getImageUrl(feed.image)}
-            alt={feed.name}
-            className="w-full h-64 object-cover rounded-t-lg"
-          />
-        ) : (
-          <div className="w-full h-64 bg-gray-100 flex items-center justify-center">
-            <span className="text-gray-500">No Image</span>
-          </div>
-        )}
-        <CardHeader>
-          <CardTitle className="text-2xl">{feed.name}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-muted-foreground mb-4">{feed.description}</p>
-          <div className="space-y-2 text-sm">
-            <div><strong>Type:</strong> {feed.feed_type}</div>
-            <div><strong>Region:</strong> {feed.region}</div>
-            <div><strong>Price:</strong> KSh {Number(feed.price_per_kg).toFixed(2)} per kg</div>
-            <div><strong>Available:</strong> {feed.available_quantity_kg} kg</div>
-            <div><strong>Status:</strong> 
-              <Badge variant={feed.is_available ? "default" : "secondary"}>
-                {feed.is_available ? "In Stock" : "Out of Stock"}
-              </Badge>
-            </div>
-          </div>
-          <Button className="w-full mt-6">Add to Cart</Button>
-        </CardContent>
-      </Card>
+    <div className="container mx-auto p-6">
+      <Link to="/" className="text-blue-600 hover:underline mb-4 inline-block">← Back</Link>
+      <h1 className="text-2xl font-bold mb-2">{feed.name}</h1>
+
+      {feed.image ? (
+        <img src={feed.image} alt={feed.name} className="w-full max-w-md object-cover rounded mb-4" />
+      ) : (
+        <div className="w-full max-w-md h-48 bg-gray-200 rounded mb-4 flex items-center justify-center">
+          <span className="text-gray-500">No image available</span>
+        </div>
+      )}
+
+      <p className="mt-4">{feed.description}</p>
+
+      <div className="mt-4 space-y-1">
+        <p><strong>Type:</strong> {feed.feed_type ?? "—"}</p>
+        <p><strong>Region:</strong> {feed.region ?? "—"}</p>
+        <p><strong>Price:</strong> KSh {feed.price_per_kg ?? "—"} / kg</p>
+        <p><strong>Available:</strong> {feed.available_quantity_kg ?? "—"} kg</p>
+        <p><strong>Status:</strong> {feed.is_available ? "Available" : "Unavailable"}</p>
+      </div>
     </div>
   );
 };
